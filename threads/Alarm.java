@@ -1,12 +1,28 @@
 package nachos.threads;
 
 import nachos.machine.*;
-
+import java.util.ArrayList;
+import java.util.Iterator;
 /**
  * Uses the hardware timer to provide preemption, and to allow threads to sleep
  * until a certain time.
  */
 public class Alarm {
+  /**
+   * Threads on hold stored in this list of KThreads
+   */
+ 
+  private class KThreadTime{
+    public KThread kt;
+    public long time;
+    public KThreadTime(KThread kthread, long waitUntil) {
+      kt = kthread;
+      time = waitUntil;
+    }
+  }
+
+   private ArrayList<KThreadTime> waitingList;
+  
 	/**
 	 * Allocate a new Alarm. Set the machine's timer interrupt handler to this
 	 * alarm's callback.
@@ -15,6 +31,8 @@ public class Alarm {
 	 * <b>Note</b>: Nachos will not function correctly with more than one alarm.
 	 */
 	public Alarm() {
+    waitingList = new ArrayList<KThreadTime>();
+
 		Machine.timer().setInterruptHandler(new Runnable() {
 			public void run() {
 				timerInterrupt();
@@ -29,7 +47,20 @@ public class Alarm {
 	 * should be run.
 	 */
 	public void timerInterrupt() {
-		KThread.currentThread().yield();
+    //check if any threads on list are due to be put on ready
+    if( waitingList.size() > 0 ) {
+      Iterator<KThreadTime> it = waitingList.iterator();
+      while(it.hasNext()){
+        long wakeTime = Machine.timer().getTime(); 
+        KThreadTime ktt = it.next();
+        if( ktt.time >= wakeTime ) { //if done waiting 
+          ktt.kt.ready(); //im ready!!
+          it.remove(); //get me out of here 
+          it = waitingList.iterator(); // reset due to unknown behavior
+        }
+      }
+    }  
+    //KThread.currentThread().yield();
 	}
 
 	/**
@@ -46,8 +77,12 @@ public class Alarm {
 	 */
 	public void waitUntil(long x) {
 		// for now, cheat just to get something working (busy waiting is bad)
-		long wakeTime = Machine.timer().getTime() + x;
-		while (wakeTime > Machine.timer().getTime())
-			KThread.yield();
+		if(x <= 0) return;
+    
+    long wakeTime = Machine.timer().getTime() + x;
+		//insert sleeping thread onto queue?
+    KThreadTime ktt = new KThreadTime(KThread.currentThread(), wakeTime);
+    waitingList.add(ktt); 
+    KThread.currentThread().yield();
 	}
 }
